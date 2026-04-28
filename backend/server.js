@@ -12,32 +12,36 @@ const prisma = new PrismaClient();
 const app = express();
 const server = http.createServer(app);
 
-const ALLOWED_ORIGINS = [
-  'http://localhost:5174',
-  'http://localhost:5173',
-  'http://127.0.0.1:5174',
-  ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL.trim()] : [])
-].filter(Boolean);
-
-const corsOptions = {
+const expressCorsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
-    // Check against allowlist
-    if (ALLOWED_ORIGINS.includes(origin)) {
+    const allowed = [
+      'http://localhost:5174',
+      'http://localhost:5173',
+      'http://127.0.0.1:5174',
+      ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL.trim()] : [])
+    ].filter(Boolean);
+    if (allowed.includes(origin)) {
       return callback(null, true);
     }
-console.warn('CORS rejected origin:', origin);
+    console.warn('CORS rejected origin:', origin);
     callback(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
+const socketCorsOrigins = [
+  'http://localhost:5174',
+  'http://localhost:5173',
+  'http://127.0.0.1:5174',
+  ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL.trim()] : [])
+].filter(Boolean);
 
-const io = new Server(server, { cors: corsOptions });
 
-app.use(cors(corsOptions));
+const io = new Server(server, { cors: { origin: socketCorsOrigins, methods: ['GET', 'POST'] } });
+
+app.use(cors(expressCorsOptions));
 app.use(express.json());
 app.use('/api/csv', csvRoutes);
 

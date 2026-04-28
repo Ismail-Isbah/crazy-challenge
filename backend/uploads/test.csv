@@ -1,0 +1,4 @@
+question,category,points,type,options,correct_answer
+"Capitale de la France ?",Geo,10,qcm,"[""Paris"",""Lyon"",""Marseille""]","Paris"
+"Combien font 2+2 ?",Math,5,short,,4
+"Decode: U29ja2V0 (Base64)",CTF,15,ctf,,Socket

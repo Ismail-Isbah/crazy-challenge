@@ -11,11 +11,19 @@ const csvRoutes = require('./routes/csv');
 const prisma = new PrismaClient();
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: (process.env.FRONTEND_URL || "http://localhost:5174").trim(), methods: ["GET", "POST"] } });
+const sanitizeUrl = (url) => {
+  if (!url) return 'http://localhost:5174';
+  return url.trim().replace(/[\r\n\t"']+/g, '');
+};
+const FRONTEND_URL = sanitizeUrl(process.env.FRONTEND_URL);
 
-app.use(cors());
+const io = new Server(server, { cors: { origin: FRONTEND_URL, methods: ["GET", "POST"] } });
+
+app.use(cors({ origin: FRONTEND_URL, methods: ['GET','POST','PUT','DELETE','OPTIONS','PATCH'], credentials: true }));
 app.use(express.json());
 app.use('/api/csv', csvRoutes);
+
+
 
 // AUTH
 app.post('/api/auth/register', async (req, res) => {

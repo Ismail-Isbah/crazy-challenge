@@ -11,15 +11,33 @@ const csvRoutes = require('./routes/csv');
 const prisma = new PrismaClient();
 const app = express();
 const server = http.createServer(app);
-const sanitizeUrl = (url) => {
-  if (!url) return 'http://localhost:5174';
-  return url.trim().replace(/[\r\n\t"']+/g, '');
+
+const ALLOWED_ORIGINS = [
+  'http://localhost:5174',
+  'http://localhost:5173',
+  'http://127.0.0.1:5174',
+  ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL.trim()] : [])
+].filter(Boolean);
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    // Check against allowlist
+    if (ALLOWED_ORIGINS.includes(origin)) {
+      return callback(null, true);
+    }
+console.warn('CORS rejected origin:', origin);
+    callback(new Error('Not allowed by CORS'));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
-const FRONTEND_URL = sanitizeUrl(process.env.FRONTEND_URL);
 
-const io = new Server(server, { cors: { origin: FRONTEND_URL, methods: ["GET", "POST"] } });
+const io = new Server(server, { cors: corsOptions });
 
-app.use(cors({ origin: FRONTEND_URL, methods: ['GET','POST','PUT','DELETE','OPTIONS','PATCH'], credentials: true }));
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use('/api/csv', csvRoutes);
 

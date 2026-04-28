@@ -56,7 +56,7 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => console.log('Serveur sur http://localhost:' + PORT));
+server.listen(PORT, '0.0.0.0', () => console.log('Serveur sur http://localhost:' + PORT));
 
 // API: Recuperer toutes les questions
 app.get('/api/questions', async (req, res) => {

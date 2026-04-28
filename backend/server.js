@@ -11,7 +11,7 @@ const csvRoutes = require('./routes/csv');
 const prisma = new PrismaClient();
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: process.env.FRONTEND_URL || "http://localhost:5174", methods: ["GET", "POST"] } });
+const io = new Server(server, { cors: { origin: (process.env.FRONTEND_URL || "http://localhost:5174").trim(), methods: ["GET", "POST"] } });
 
 app.use(cors());
 app.use(express.json());

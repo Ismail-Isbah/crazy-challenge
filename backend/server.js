@@ -11,37 +11,18 @@ const csvRoutes = require('./routes/csv');
 const prisma = new PrismaClient();
 const app = express();
 const server = http.createServer(app);
-
-const expressCorsOptions = {
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    const allowed = [
-      'http://localhost:5174',
-      'http://localhost:5173',
-      'http://127.0.0.1:5174',
-      ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL.trim()] : [])
-    ].filter(Boolean);
-    if (allowed.includes(origin)) {
-      return callback(null, true);
-    }
-    console.warn('CORS rejected origin:', origin);
-    callback(new Error('Not allowed by CORS'));
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-};
-const socketCorsOrigins = [
+const SAFE_ORIGINS = [
   'http://localhost:5174',
-  'http://localhost:5173',
+  'http://localhost:5173', 
   'http://127.0.0.1:5174',
-  ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL.trim()] : [])
-].filter(Boolean);
+  // Ajoute ton URL de production ici UNE FOIS qu'elle est validée manuellement:
+  // 'https://ton-frontend.vercel.app'
+];
 
 
-const io = new Server(server, { cors: { origin: socketCorsOrigins, methods: ['GET', 'POST'] } });
+const io = new Server(server, { cors: { origin: SAFE_ORIGINS, methods: ['GET', 'POST'] } });
 
-app.use(cors(expressCorsOptions));
+app.use(cors({ origin: SAFE_ORIGINS, methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'], credentials: true }));
 app.use(express.json());
 app.use('/api/csv', csvRoutes);
 

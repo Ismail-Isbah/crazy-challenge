@@ -9,6 +9,15 @@ require('dotenv').config();
 const csvRoutes = require('./routes/csv');
 
 const prisma = new PrismaClient();
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection:', reason);
+});
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error.message);
+  process.exit(1);
+});
+
 const app = express();
 const server = http.createServer(app);
 const SAFE_ORIGINS = [
@@ -24,6 +33,12 @@ const io = new Server(server, { cors: { origin: SAFE_ORIGINS, methods: ['GET', '
 
 app.use(cors({ origin: SAFE_ORIGINS, methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'], credentials: true }));
 app.use(express.json());
+
+app.get('/debug/ping', (req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json', 'X-Debug': 'server-alive' });
+  res.end(JSON.stringify({ ok: true, time: Date.now(), port: process.env.PORT || 10000 }));
+});
+
 app.use('/api/csv', csvRoutes);
 
 

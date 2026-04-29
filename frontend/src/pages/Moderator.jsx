@@ -24,7 +24,7 @@ export default function Moderator() {
     });
 
     // Charger les questions depuis l'API
-    fetch('http://localhost:3000/api/questions')
+    fetch(`${import.meta.env.VITE_BACKEND_URL}/api/questions`)
       .then((res) => res.json())
       .then((data) => setQuestions(data))
       .catch(() => console.log('API questions non disponible'));

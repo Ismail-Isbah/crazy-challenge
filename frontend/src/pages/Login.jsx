@@ -16,7 +16,7 @@ export default function Login() {
     try {
       const payload = { username, password, teamName };
       if (isRegister) payload.role = 'team';
-      const res = await axios.post(`http://localhost:3000${endpoint}`, payload);
+      const res = await axios.post(`${import.meta.env.VITE_BACKEND_URL}${endpoint}`, payload);
       if (!isRegister) {
         localStorage.setItem('token', res.data.token);
         localStorage.setItem('role', res.data.role);

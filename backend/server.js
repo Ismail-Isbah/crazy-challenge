@@ -16,7 +16,7 @@ const SAFE_ORIGINS = [
   'http://localhost:5173', 
   'http://127.0.0.1:5174',
   // Ajoute ton URL de production ici UNE FOIS qu'elle est validée manuellement:
-  // 'https://ton-frontend.vercel.app'
+  'https://crazy-challenge.vercel.app'
 ];
 
 
@@ -133,10 +133,3 @@ io.on('connection', (socket) => {
 app.get('/api/heatmap', (req, res) => {
   res.json(heatmapData);
 });
-// REBUILD_FORCE_1777416296
-const SAFE_ORIGINS = [
-  'http://localhost:5174',
-  'http://localhost:5173',
-  'http://127.0.0.1:5174',
-  'https://crazy-challenge.vercel.app'  // ← Ajoute cette ligne
-];

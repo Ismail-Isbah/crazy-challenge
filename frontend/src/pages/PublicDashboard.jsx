@@ -1,107 +1,397 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 
-const socket = io(import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000');
+const styles = `
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --cyan: #06b6d4; --indigo: #6366f1; --red: #ef4444;
+    --green: #22c55e; --gold: #fbbf24; --bg: #04080f;
+    --surface: rgba(8, 14, 28, 0.82); --border: rgba(255,255,255,0.065);
+    --text: #e2e8f0; --muted: rgba(148,163,184,0.55); --radius: 22px;
+  }
+
+  .pub-root {
+    min-height: 100svh;
+    background: var(--bg);
+    font-family: 'DM Sans', sans-serif;
+    color: var(--text);
+    padding: 1rem;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  .pub-bg {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(ellipse 70% 60% at 10% 10%, rgba(6,182,212,0.1) 0%, transparent 55%),
+      radial-gradient(ellipse 60% 70% at 90% 90%, rgba(99,102,241,0.09) 0%, transparent 55%);
+  }
+
+  .pub-grid {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+      linear-gradient(rgba(6,182,212,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(6,182,212,0.03) 1px, transparent 1px);
+    background-size: 52px 52px;
+    animation: gridDrift 40s linear infinite;
+  }
+
+  @keyframes gridDrift {
+    0% { background-position: 0 0, 0 0; }
+    100% { background-position: 52px 52px, 52px 52px; }
+  }
+
+  .pub-inner {
+    position: relative; z-index: 10;
+    max-width: 1400px; margin: 0 auto;
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    grid-template-rows: auto auto 1fr;
+    gap: 1rem;
+    grid-template-areas:
+      "header header"
+      "question sidebar"
+      "heatmap sidebar";
+  }
+
+  @media (max-width: 1024px) {
+    .pub-inner {
+      grid-template-columns: 1fr;
+      grid-template-areas: "header" "question" "sidebar" "heatmap";
+    }
+  }
+
+  .area-header { grid-area: header; }
+  .area-question { grid-area: question; }
+  .area-sidebar { grid-area: sidebar; }
+  .area-heatmap { grid-area: heatmap; }
+
+  /* Glass card */
+  .gc {
+    background: var(--surface);
+    backdrop-filter: blur(24px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .gc-cyan { border-color: rgba(6,182,212,0.22); }
+  .gc-gold { border-color: rgba(251,191,36,0.22); }
+  .gc-indigo { border-color: rgba(99,102,241,0.22); }
+  .gc-green { border-color: rgba(34,197,94,0.22); }
+
+  /* Header */
+  .pub-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.9rem 1.25rem; animation: revealDown 0.6s ease both;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-logo {
+    width: 42px; height: 42px; border-radius: 13px;
+    background: linear-gradient(135deg, var(--cyan), var(--indigo));
+    display: flex; align-items: center; justify-content: center;
+  }
+  .brand-name {
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem;
+    letter-spacing: 0.08em; color: #f0f9ff;
+  }
+  .brand-sub { font-size: 0.65rem; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; }
+  .live-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 14px; border-radius: 999px;
+    background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
+    font-size: 0.75rem; color: #f87171; font-weight: 600;
+  }
+  .live-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #ef4444; animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity:1; box-shadow:0 0 8px #ef4444; } 50% { opacity:0.4; } }
+
+  /* Question card */
+  .q-card { padding: 2rem; animation: revealUp 0.5s 0.1s ease both; }
+  .q-header { display: flex; align-items: center; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
+  .qtag {
+    padding: 3px 11px; border-radius: 999px; font-size: 0.68rem;
+    font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase;
+  }
+  .qtag-cat { background: linear-gradient(135deg, #0891b2, #6366f1); color: #fff; }
+  .qtag-pts { background: rgba(251,191,36,0.1); color: #fbbf24; border: 1px solid rgba(251,191,36,0.28); }
+  .qtag-easy { background: rgba(34,197,94,0.1); color: #4ade80; border: 1px solid rgba(34,197,94,0.25); }
+  .qtag-med { background: rgba(251,191,36,0.1); color: #fbbf24; border: 1px solid rgba(251,191,36,0.25); }
+  .qtag-hard { background: rgba(239,68,68,0.1); color: #f87171; border: 1px solid rgba(239,68,68,0.25); }
+  .q-text {
+    font-family: 'Syne', sans-serif; font-size: clamp(1.3rem, 2.5vw, 2rem);
+    font-weight: 700; color: #f0f9ff; line-height: 1.4;
+  }
+  .q-timer {
+    margin-top: 1.5rem; display: flex; align-items: center; gap: 1rem;
+  }
+  .timer-circle {
+    width: 60px; height: 60px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--indigo), var(--cyan));
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; color: #fff;
+  }
+  .timer-label { font-size: 0.8rem; color: var(--muted); }
+
+  /* Sidebar: Leaderboard + Buzz activity */
+  .sidebar { display: flex; flex-direction: column; gap: 1rem; }
+  .panel { padding: 1.25rem; }
+  .panel-title {
+    font-family: 'Syne', sans-serif; font-size: 0.95rem; font-weight: 700;
+    color: #f0f9ff; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px;
+  }
+  .lb-list { display: flex; flex-direction: column; gap: 0.75rem; }
+  .lb-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 0.75rem 1rem; background: rgba(255,255,255,0.03);
+    border-radius: 12px; transition: background 0.2s;
+  }
+  .lb-item:hover { background: rgba(255,255,255,0.06); }
+  .lb-rank {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: rgba(255,255,255,0.06);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; font-weight: 700; color: var(--muted);
+  }
+  .lb-rank.gold { background: rgba(251,191,36,0.15); color: #fbbf24; }
+  .lb-rank.silver { background: rgba(148,163,184,0.12); color: #94a3b8; }
+  .lb-rank.bronze { background: rgba(180,83,9,0.15); color: #fb923c; }
+  .lb-name { flex: 1; font-weight: 600; font-size: 0.9rem; }
+  .lb-score { font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; color: var(--gold); }
+
+  /* Buzz activity */
+  .buzz-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 200px; overflow-y: auto; }
+  .buzz-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 0.5rem 0.75rem; background: rgba(239,68,68,0.05);
+    border-radius: 10px; font-size: 0.8rem; animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn { from { opacity:0; transform:translateX(12px); } to { opacity:1; transform:translateX(0); } }
+  .buzz-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
+
+  /* Heatmap */
+  .heatmap { padding: 1.25rem; }
+  .hm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; }
+  .hm-card {
+    padding: 1rem; background: rgba(255,255,255,0.03);
+    border-radius: 12px; text-align: center;
+  }
+  .hm-title { font-size: 0.75rem; color: var(--muted); margin-bottom: 0.5rem; }
+  .hm-bars { display: flex; gap: 4px; justify-content: center; margin-bottom: 0.5rem; }
+  .hm-bar { width: 8px; border-radius: 4px; transition: height 0.3s; }
+  .hm-bar.correct { background: var(--green); }
+  .hm-bar.wrong { background: var(--red); opacity: 0.6; }
+  .hm-stats { display: flex; justify-content: center; gap: 1rem; font-size: 0.7rem; }
+  .hm-correct { color: var(--green); }
+  .hm-wrong { color: var(--red); }
+
+  /* Empty state */
+  .empty {
+    text-align: center; padding: 2rem; color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  /* Keyframes */
+  @keyframes revealDown { from { opacity:0; transform:translateY(-20px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes revealUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
+`;
 
 export default function PublicDashboard() {
+  const [isConnected, setIsConnected] = useState(false);
+  const [currentQuestion, setCurrentQuestion] = useState(null);
   const [teams, setTeams] = useState([]);
-  const [currentQ, setCurrentQ] = useState(null);
+  const [buzzActivity, setBuzzActivity] = useState([]);
   const [heatmap, setHeatmap] = useState({});
-  const [votes, setVotes] = useState({ good: 0, bad: 0 });
+  const socketRef = useRef(null);
 
   useEffect(() => {
-    socket.emit('join', { room: 'public-room', role: 'public' });
-    
-    socket.on('game:new_question', (q) => { setCurrentQ(q); setHeatmap({}); });
-    socket.on('score:refresh', (d) => setTeams(d.teams || []));
-    socket.on('heatmap:update', ({ questionId, stats }) => setHeatmap(prev => ({...prev, [questionId]: stats})));
-    
-    // 🎮 INNOVATION 2 : Votes spectateurs
-    socket.on('public:vote', (type) => setVotes(v => ({...v, [type]: v[type] + 1})));
+    const socket = io(import.meta.env.VITE_BACKEND_URL || 'http://localhost:10000');
+    socketRef.current = socket;
 
-    return () => {
-      socket.off('game:new_question');
-      socket.off('score:refresh');
-      socket.off('heatmap:update');
-    };
+    socket.on('connect', () => {
+      setIsConnected(true);
+      socket.emit('join', { room: 'public-room', role: 'spectator' });
+    });
+
+    socket.on('game:new_question', (data) => {
+      setCurrentQuestion({
+        id: data.id,
+        text: data.text || data.question,
+        category: data.category || 'Général',
+        points: data.points || 0,
+        difficulty: data.difficulty || data.type || 'medium',
+        timeLimit: data.timeLimit || data.timer || 30
+      });
+    });
+
+    socket.on('score:refresh', (data) => {
+      const sorted = [...(data.teams || [])].sort((a, b) => b.score - a.score);
+      setTeams(sorted.slice(0, 5)); // Top 5
+    });
+
+    socket.on('buzz:first', (data) => {
+      setBuzzActivity(prev => [{
+        id: Date.now(),
+        teamName: data.teamName || 'Équipe',
+        time: new Date().toLocaleTimeString()
+      }, ...prev].slice(0, 10));
+    });
+
+    socket.on('heatmap:update', (data) => {
+      setHeatmap(prev => ({ ...prev, [data.questionId]: data.stats }));
+    });
+
+    socket.on('disconnect', () => setIsConnected(false));
+    return () => socket.disconnect();
   }, []);
 
-  const castVote = (type) => socket.emit('public:vote', type);
-
-  const successRate = heatmap[currentQ?.id]?.correct / (heatmap[currentQ?.id]?.correct + heatmap[currentQ?.id]?.wrong || 1) * 100;
+  const diffMap = {
+    easy: ['qtag-easy', 'Facile'],
+    medium: ['qtag-med', 'Moyen'],
+    hard: ['qtag-hard', 'Difficile']
+  };
 
   return (
-    <div className="min-h-screen bg-black text-white p-4 md:p-8 flex flex-col items-center">
-      <header className="w-full max-w-6xl flex justify-between items-center mb-6 border-b border-gray-800 pb-4">
-        <h1 className="text-3xl md:text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">🏆 CRAZY CHALLENGE</h1>
-        <div className="text-right">
-          <div className="text-sm text-gray-400">Session en direct</div>
-          <div className="text-2xl font-mono font-bold text-green-400">● LIVE</div>
-        </div>
-      </header>
+    <>
+      <style>{styles}</style>
+      <div className="pub-root">
+        <div className="pub-bg" />
+        <div className="pub-grid" />
 
-      {/* Question Actuelle */}
-      <div className="w-full max-w-4xl bg-gray-900/50 rounded-3xl p-6 md:p-10 mb-8 border border-gray-800 text-center">
-        {currentQ ? (
-          <>
-            <span className="inline-block px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-sm mb-4">{currentQ.category} • {currentQ.type.toUpperCase()}</span>
-            <h2 className="text-2xl md:text-4xl font-bold mb-6 leading-tight">{currentQ.text}</h2>
-            {currentQ.options && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
-                {currentQ.options.map((opt, i) => (
-                  <div key={i} className="p-4 bg-gray-800 rounded-xl border border-gray-700 text-lg font-medium">{String.fromCharCode(65+i)}. {opt}</div>
-                ))}
+        <div className="pub-inner">
+          {/* Header */}
+          <div className="gc gc-cyan pub-header area-header">
+            <div className="brand">
+              <div className="brand-logo">
+                <svg width="20" height="20" fill="none" stroke="#fff" strokeWidth="2.2" viewBox="0 0 24 24">
+                  <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+              </div>
+              <div>
+                <p className="brand-name">Crazy Challenge</p>
+                <p className="brand-sub">Tableau public</p>
+              </div>
+            </div>
+            <div className="live-badge">
+              <span className="live-dot" />
+              {isConnected ? 'EN DIRECT' : 'HORS LIGNE'}
+            </div>
+          </div>
+
+          {/* Question en cours */}
+          <div className="area-question">
+            {currentQuestion ? (
+              <div className="gc gc-cyan q-card">
+                <div className="q-header">
+                  <span className="qtag qtag-cat">{currentQuestion.category}</span>
+                  <span className="qtag qtag-pts">{currentQuestion.points} pts</span>
+                  <span className={`qtag ${diffMap[currentQuestion.difficulty]?.[0] || 'qtag-med'}`}>
+                    {diffMap[currentQuestion.difficulty]?.[1] || currentQuestion.difficulty}
+                  </span>
+                </div>
+                <p className="q-text">{currentQuestion.text}</p>
+                <div className="q-timer">
+                  <div className="timer-circle">⏱️</div>
+                  <div>
+                    <p style={{ fontWeight: 600 }}>Temps restant</p>
+                    <p className="timer-label">Compte à rebours en cours...</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="gc" style={{ padding: '2rem', textAlign: 'center' }}>
+                <p className="empty">⏳ En attente d'une question...</p>
               </div>
             )}
-          </>
-        ) : <p className="text-gray-500 text-xl animate-pulse">En attente de la prochaine question...</p>}
-      </div>
-
-      <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Classement */}
-        <div className="bg-gray-900/50 rounded-2xl p-6 border border-gray-800">
-          <h3 className="text-xl font-bold mb-4 flex items-center gap-2">📊 Classement Temps Réel</h3>
-          <div className="space-y-3">
-            {teams.length > 0 ? teams.sort((a,b)=>b.score-a.score).map((t, i) => (
-              <div key={t.id} className="flex items-center justify-between p-3 bg-gray-800/50 rounded-xl border-l-4" style={{borderColor: i===0?'#fbbf24':i===1?'#94a3b8':'#cd7f32'}}>
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl font-black w-8">{i+1}</span>
-                  <span className="font-semibold text-lg">{t.name}</span>
-                </div>
-                <span className="text-2xl font-bold text-yellow-400">{t.score}</span>
-              </div>
-            )) : <p className="text-gray-500 text-center py-8">En attente des scores...</p>}
-          </div>
-        </div>
-
-        {/* Heatmap & Votes Spectateurs */}
-        <div className="space-y-6">
-          <div className="bg-gray-900/50 rounded-2xl p-6 border border-gray-800">
-            <h3 className="text-xl font-bold mb-4">📈 Taux de Réussite (Heatmap)</h3>
-            {currentQ ? (
-              <div className="space-y-4">
-                <div className="h-6 bg-gray-800 rounded-full overflow-hidden flex">
-                  <div className="bg-green-500 h-full transition-all duration-500" style={{width: `${successRate || 0}%`}}></div>
-                  <div className="bg-red-500 h-full transition-all duration-500" style={{width: `${100 - (successRate || 0)}%`}}></div>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-green-400">✅ {Math.round(successRate || 0)}% Correct</span>
-                  <span className="text-red-400">❌ {Math.round(100 - (successRate || 0))}% Échec</span>
-                </div>
-              </div>
-            ) : <p className="text-gray-500">Aucune donnée</p>}
           </div>
 
-          <div className="bg-gray-900/50 rounded-2xl p-6 border border-gray-800 text-center">
-            <h3 className="text-xl font-bold mb-4">🎮 Votez pour cette question !</h3>
-            <div className="flex gap-4 justify-center">
-              <button onClick={()=>castVote('good')} className="flex-1 min-h-[56px] bg-blue-600 hover:bg-blue-500 active:scale-95 rounded-xl font-bold text-lg transition">👍 Fun</button>
-              <button onClick={()=>castVote('bad')} className="flex-1 min-h-[56px] bg-gray-700 hover:bg-gray-600 active:scale-95 rounded-xl font-bold text-lg transition">👎 Difficile</button>
+          {/* Sidebar: Classement + Buzz */}
+          <div className="sidebar area-sidebar">
+            {/* Leaderboard */}
+            <div className="gc gc-gold panel">
+              <h3 className="panel-title">
+                <svg width="16" height="16" fill="none" stroke="#fbbf24" strokeWidth="2" viewBox="0 0 24 24">
+                  <path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+                </svg>
+                Classement
+              </h3>
+              {teams.length === 0 ? (
+                <p className="empty">En attente des équipes...</p>
+              ) : (
+                <div className="lb-list">
+                  {teams.map((team, i) => (
+                    <div key={team.id || i} className="lb-item">
+                      <div className={`lb-rank ${i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : ''}`}>
+                        {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
+                      </div>
+                      <span className="lb-name">{team.name || `Équipe ${team.id}`}</span>
+                      <span className="lb-score">{team.score}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="mt-3 text-sm text-gray-400">{votes.good} 👍 vs {votes.bad} 👎</div>
+
+            {/* Buzz activity */}
+            <div className="gc gc-red panel">
+              <h3 className="panel-title">
+                <svg width="16" height="16" fill="none" stroke="#ef4444" strokeWidth="2" viewBox="0 0 24 24">
+                  <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                </svg>
+                Buzz récents
+              </h3>
+              {buzzActivity.length === 0 ? (
+                <p className="empty">Aucun buzz pour l'instant...</p>
+              ) : (
+                <div className="buzz-list">
+                  {buzzActivity.map((buzz) => (
+                    <div key={buzz.id} className="buzz-item">
+                      <span className="buzz-dot" />
+                      <span style={{ flex: 1 }}>{buzz.teamName}</span>
+                      <span style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>{buzz.time}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Heatmap des réponses */}
+          <div className="area-heatmap">
+            <div className="gc gc-indigo heatmap">
+              <h3 className="panel-title">
+                <svg width="16" height="16" fill="none" stroke="#6366f1" strokeWidth="2" viewBox="0 0 24 24">
+                  <path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>
+                </svg>
+                Statistiques des réponses
+              </h3>
+              {Object.keys(heatmap).length === 0 ? (
+                <p className="empty">En attente de données...</p>
+              ) : (
+                <div className="hm-grid">
+                  {Object.entries(heatmap).slice(0, 6).map(([qId, stats]) => (
+                    <div key={qId} className="hm-card">
+                      <p className="hm-title">Question #{qId}</p>
+                      <div className="hm-bars">
+                        <div className="hm-bar correct" style={{ height: `${Math.min(60, stats.correct * 10)}px` }} />
+                        <div className="hm-bar wrong" style={{ height: `${Math.min(60, stats.wrong * 10)}px` }} />
+                      </div>
+                      <div className="hm-stats">
+                        <span className="hm-correct">✓ {stats.correct}</span>
+                        <span className="hm-wrong">✗ {stats.wrong}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

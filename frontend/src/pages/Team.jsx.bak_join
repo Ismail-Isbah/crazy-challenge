@@ -900,36 +900,27 @@ export default function Team() {
   }, [timer]);
 
   /* ── Buzz ── */
-  // Cherche cette partie dans handleBuzz
-const handleBuzz = useCallback(async () => {
-  if (hasBuzzed || !question || timer === 0) return;
-  setHasBuzzed(true);
-  setBuzzed(true);
-  setShowParticles(true);
-  setTimeout(() => setShowParticles(false), 800);
+  const handleBuzz = useCallback(async () => {
+    if (hasBuzzed || !question || timer === 0) return;
+    setHasBuzzed(true);
+    setBuzzed(true);
+    setShowParticles(true);
+    setTimeout(() => setShowParticles(false), 800);
 
-  try {
-    const token = localStorage.getItem('token');
-    const teamId = localStorage.getItem('teamId') || `team-${Date.now()}`; // ✅ Ajouté
-    
-    await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/game/buzz`, {
-      method: 'POST',
-      headers: { 
-        'Authorization': `Bearer ${token}`, 
-        'Content-Type': 'application/json' 
-      },
-      body: JSON.stringify({ 
-        questionId: question.id, 
-        buzzTime: timer,
-        teamId: teamId // ✅ Envoyé au backend
-      }),
-    });
-  } catch (err) {
-    console.error('Erreur buzz:', err);
-    setHasBuzzed(false);
-    setBuzzed(false);
-  }
-}, [hasBuzzed, question, timer]);
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/game/buzz`, {
+        method:  'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ questionId: question.id, buzzTime: timer }),
+      });
+    } catch (err) {
+      console.error('Erreur buzz:', err);
+      setHasBuzzed(false);
+      setBuzzed(false);
+    }
+  }, [hasBuzzed, question, timer]);
+
   /* ── Derived ── */
   const diffMap  = { easy: ['qtag-easy','Facile'], medium: ['qtag-med','Moyen'], hard: ['qtag-hard','Difficile'] };
   const [diffCls, diffLbl] = diffMap[question?.difficulty] ?? ['qtag-med', question?.difficulty ?? ''];

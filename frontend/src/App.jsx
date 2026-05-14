@@ -2,7 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Login from './pages/Login';
 import Moderator from './pages/Moderator';
 import Team from './pages/Team';
-import PublicDashboard from './pages/PublicDashboard';
+import PublicDashboard from './pages/PublicDashboard'; // ✅ Import unique
 import Jury from './pages/Jury';
 
 export default function App() {

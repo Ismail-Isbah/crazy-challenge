@@ -57,7 +57,7 @@ app.post('/api/game/buzz', async (req, res) => {
       points: 0,
       timestamp: new Date()
     });
-  io.to('public-room').emit('buzz:first', { teamName: teamId || 'Équipe', time: Date.now() });
+  io.to('public-room').emit('buzz:first', { teamName: data.teamName || 'Équipe', time: Date.now() });
     
     res.json({ success: true, message: 'Buzz enregistré' });
   } catch (error) {
@@ -177,14 +177,7 @@ socket.on('moderator:send_question', (data) => {
       type: data.type || 'multiple_choice',
       timeLimit: data.timer || data.timeLimit || 30
     });
-  io.to('public-room').emit('game:new_question', {
-    id: data.id,
-    text: data.text || data.question,
-    category: data.category || 'Général',
-    points: data.points || 10,
-    type: data.type || 'multiple_choice',
-    timeLimit: data.timer || data.timeLimit || 30
-  });
+  io.to('public-room').emit('game:new_question', data);
   });
 socket.on('team:buzz', ({ teamId, teamName, questionId, buzzTime, points }) => {
     console.log('🔴 Buzz reçu:', { teamId, questionId, buzzTime });

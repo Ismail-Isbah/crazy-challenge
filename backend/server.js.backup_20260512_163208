@@ -57,7 +57,6 @@ app.post('/api/game/buzz', async (req, res) => {
       points: 0,
       timestamp: new Date()
     });
-  io.to('public-room').emit('buzz:first', { teamName: teamId || 'Équipe', time: Date.now() });
     
     res.json({ success: true, message: 'Buzz enregistré' });
   } catch (error) {
@@ -147,27 +146,22 @@ app.get('/api/questions', async (req, res) => {
   }
 });
 
-
-let activeTeams = {}; // Stockage en mémoire : { teamId: { id, name, score, socketId } }
+// ── SOCKET.IO (UN SEUL BLOC FUSIONNÉ) ─────────────────────
+// Stockage temporaire pour buzz & heatmap
+let buzzQueue = [];
+let heatmapData = {};
 
 io.on('connection', (socket) => {
   console.log('✅ Connecté:', socket.id);
-
-socket.on('join', ({ room, role, teamId, teamName }) => {
-    socket.join(room);
-    console.log(`📡 ${socket.id} -> ${room} (${role})`);
-
-    if (role === 'team' && teamId) {
-      activeTeams[teamId] = {
-        id: teamId,
-        name: teamName || `Équipe ${teamId}`,
-        score: 0,
-        socketId: socket.id
-      };
-io.to('moderator-session').emit('score:refresh', { teams: Object.values(activeTeams) });
-    }
+  
+  // Rejoindre une room
+  socket.on('join', ({ room, role }) => { 
+    socket.join(room); 
+    console.log(`📡 ${socket.id} -> ${room} (${role})`); 
   });
-socket.on('moderator:send_question', (data) => {
+  
+  // 📤 Modérateur envoie une question → Équipes
+  socket.on('moderator:send_question', (data) => {
     console.log('📤 Question envoyée:', data.text || data.question);
     io.to('session-1').emit('game:new_question', {
       id: data.id,
@@ -177,17 +171,25 @@ socket.on('moderator:send_question', (data) => {
       type: data.type || 'multiple_choice',
       timeLimit: data.timer || data.timeLimit || 30
     });
-  io.to('public-room').emit('game:new_question', {
-    id: data.id,
-    text: data.text || data.question,
-    category: data.category || 'Général',
-    points: data.points || 10,
-    type: data.type || 'multiple_choice',
-    timeLimit: data.timer || data.timeLimit || 30
   });
-  });
-socket.on('team:buzz', ({ teamId, teamName, questionId, buzzTime, points }) => {
+  
+  // 🔴 Équipe buzz → Modérateur
+  socket.on('team:buzz', ({ teamId, teamName, questionId, buzzTime, points }) => {
     console.log('🔴 Buzz reçu:', { teamId, questionId, buzzTime });
+    
+    buzzQueue.push({ teamId, teamName, timestamp: Date.now(), buzzTime });
+    buzzQueue.sort((a, b) => a.timestamp - b.timestamp);
+    
+    // Premier buzz → toutes les équipes
+    io.to('session-1').emit('buzz:first', {
+      teamId: buzzQueue[0].teamId,
+      teamName: buzzQueue[0].teamName
+    });
+    
+    // File d'attente → modérateur
+    io.to('moderator-session').emit('buzz:queue', buzzQueue);
+    
+    // Réponse reçue → modérateur (format compatible frontend)
     io.to('moderator-session').emit('game:answer_received', {
       id: Date.now(),
       teamId: teamId || teamName || 'Équipe',
@@ -199,22 +201,42 @@ socket.on('team:buzz', ({ teamId, teamName, questionId, buzzTime, points }) => {
       timestamp: new Date()
     });
   });
- socket.on('answer:validate', ({ teamId, accepted, points }) => {
-    if (accepted && activeTeams[teamId]) {
-      activeTeams[teamId].score += points;
-      // Notifier l'équipe que son score a changé
-      io.to(activeTeams[teamId].socketId).emit('game:score_update', activeTeams[teamId].score);
-    }
-  const sortedTeams = Object.values(activeTeams).sort((a, b) => b.score - a.score);
-    io.to('moderator-session').emit('score:refresh', { teams: sortedTeams });
-  io.to('public-room').emit('score:refresh', { teams: sortedTeams });
+  
+  // Fallback: ancien événement team:answer
+  socket.on('team:answer', (data) => {
+    io.to('moderator-session').emit('game:answer_received', data);
   });
-
+  
+  // 📝 Validation jury
+  socket.on('jury:validate', ({ answerId, teamId, accepted, points, comment }) => {
+    io.to('moderator-session').emit('jury:decision', { answerId, accepted, points, comment });
+    if (accepted) {
+      io.to('session-1').emit('score:update', { teamId, points });
+    }
+  });
+  
+  // 📊 Heatmap
+  socket.on('answer:submit', ({ questionId, teamId, isCorrect }) => {
+    if (!heatmapData[questionId]) heatmapData[questionId] = { correct: 0, wrong: 0 };
+    if (isCorrect) heatmapData[questionId].correct++;
+    else heatmapData[questionId].wrong++;
+    io.to('public-room').emit('heatmap:update', { questionId, stats: heatmapData[questionId] });
+  });
+  
+  // Déconnexion
   socket.on('disconnect', () => {
     console.log('❌ Déconnecté:', socket.id);
+    // Nettoyer buzzQueue si besoin
+    buzzQueue = buzzQueue.filter(b => b.teamId !== socket.id);
   });
 });
 
+// ── API: Heatmap ───────────────────────────────────────────
+app.get('/api/heatmap', (req, res) => {
+  res.json(heatmapData);
+});
+
+// ── Démarrage ──────────────────────────────────────────────
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Serveur prêt sur http://localhost:${PORT}`);
